@@ -1,9 +1,9 @@
 #!/bin/sh
-# File d'attente de notifications système, affichée dans la barre tmux.
-#   add <titre> <message>   empile une notification
-#   count                   pastille pour la barre de statut (vide si rien)
-#   show                    affiche la liste puis marque tout comme lu
-#   clear                   marque tout comme lu sans afficher
+# Desktop notification queue, shown in the tmux status bar.
+#   add <title> <message>   queue a notification
+#   count                   status bar badge (empty when nothing is pending)
+#   show                    display the list, then mark everything read
+#   clear                   mark everything read without displaying
 set -u
 
 DIR="${XDG_STATE_HOME:-$HOME/.local/state}/tmux-notify"
@@ -11,9 +11,9 @@ PENDING="$DIR/pending"
 ARCHIVE="$DIR/archive"
 TMUX_BIN=$(command -v tmux)
 TAB=$(printf '\t')
-HISTORY=30          # entrées d'historique affichées par show
+HISTORY=30          # history entries displayed by show
 
-# Palette (Solarized Dark), alignée sur ~/.tmux.conf
+# Palette (Solarized Dark), kept in sync with tmux.conf
 BG="#002b36"; SURFACE="#073642"; MUTED="#586e75"
 FG="#93a1a1"; FG_DIM="#839496"
 BLUE="#268bd2"; LAVENDER="#6c71c4"; PEACH="#cb4b16"; YELLOW="#b58900"
@@ -22,15 +22,15 @@ mkdir -p "$DIR"
 [ -f "$PENDING" ] || : > "$PENDING"
 [ -f "$ARCHIVE" ] || : > "$ARCHIVE"
 
-# Force le redessin immédiat de la barre plutôt que d'attendre status-interval.
-# Sans $TMUX (cas du démon systemd), on cible le socket par défaut.
+# Redraw the bar now instead of waiting for status-interval.
+# Without $TMUX (systemd daemon), the default socket is used.
 refresh() {
     [ -x "$TMUX_BIN" ] && "$TMUX_BIN" refresh-client -S 2>/dev/null
     return 0
 }
 
-# render <titre de section> <sous-titre> <couleur bordure> <couleur message>
-# Lit des enregistrements sur stdin et dessine un cartouche par notification.
+# render <section title> <subtitle> <border colour> <message colour>
+# Reads records on stdin and draws one box per notification.
 render() {
     awk -F "$TAB" -v width="$COLS" -v section="$1" -v subtitle="$2" \
         -v c_border="$3" -v c_msg="$4" -v c_time="$PEACH" -v c_app="$BLUE" \
@@ -40,12 +40,12 @@ render() {
             strtonum("0x" substr(h, 4, 2)) ";" strtonum("0x" substr(h, 6, 2)) "m"
     }
     function rule(n,    s) { s = ""; while (n-- > 0) s = s "─"; return s }
-    # Largeur affichée : les emojis (U+1F300-U+1FAFF) occupent deux cellules.
+    # Display width: emojis (U+1F300-U+1FAFF) take two cells.
     function vlen(s) { return length(s) + gsub(/[🌀-🫿]/, "&", s) }
     function row(s, c) {
         printf "%s│ %s%s%*s%s │%s\n", border, c, s, inner - vlen(s), "", border, reset
     }
-    # Découpe aux espaces ; un mot plus long que la ligne (URL) est coupé net.
+    # Wrap on spaces; a word longer than the line (URL) is hard-split.
     function wrap(s, c,    n, w, i, cur) {
         n = split(s, w, " "); cur = ""
         for (i = 1; i <= n; i++) {
@@ -86,9 +86,8 @@ render() {
 
 case "${1:-show}" in
     add)
-        # Un enregistrement = une ligne. Les corps de notification contiennent
-        # souvent des retours à la ligne : sans ça, le compteur et l'affichage
-        # partent en vrille.
+        # One record per line. Notification bodies often contain newlines,
+        # which would otherwise break both the counter and the display.
         flat() { printf '%s' "$1" | tr '\n\r\t' '   ' | tr -s ' '; }
         printf '%s\t%s\t%s\n' "$(date '+%H:%M')" \
             "$(flat "${2:-notification}")" "$(flat "${3:-}")" >> "$PENDING"
@@ -105,12 +104,12 @@ case "${1:-show}" in
         COLS=$(tput cols 2>/dev/null) || COLS=80
         {
             if [ -s "$PENDING" ]; then
-                render "Non lues" "$(wc -l < "$PENDING")" "$YELLOW" "$FG" < "$PENDING"
+                render "Unread" "$(wc -l < "$PENDING")" "$YELLOW" "$FG" < "$PENDING"
             else
-                printf '\033[2m (aucune notification non lue)\033[0m\n\n'
+                printf '\033[2m (no unread notifications)\033[0m\n\n'
             fi
             if [ -s "$ARCHIVE" ]; then
-                tail -n "$HISTORY" "$ARCHIVE" | render "Historique" "$HISTORY dernières" "$MUTED" "$FG_DIM"
+                tail -n "$HISTORY" "$ARCHIVE" | render "History" "last $HISTORY" "$MUTED" "$FG_DIM"
             fi
         } | less -R
         cat "$PENDING" >> "$ARCHIVE"

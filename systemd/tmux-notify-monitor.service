@@ -1,5 +1,5 @@
 [Unit]
-Description=Relaie les notifications du bureau vers la barre de statut tmux
+Description=Relay desktop notifications to the tmux status bar
 PartOf=graphical-session.target
 After=graphical-session.target
 

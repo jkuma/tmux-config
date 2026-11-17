@@ -1,6 +1,6 @@
 # tmux-config
 
-Configuration tmux pensée pour le développement au quotidien avec [Claude Code](https://claude.com/claude-code) : leader `Ctrl+Space`, popups fzf pour naviguer entre projets et sessions, barre de statut Solarized Dark, notifications du bureau dans la barre.
+A tmux configuration built for day-to-day development with [Claude Code](https://claude.com/claude-code): `Ctrl+Space` leader, fzf popups to jump between projects and sessions, a Solarized Dark status bar, and desktop notifications in the bar.
 
 ## Installation
 
@@ -9,72 +9,72 @@ git clone https://github.com/jkuma/tmux-config.git ~/Projects/tmux-config
 ~/Projects/tmux-config/install.sh
 ```
 
-`install.sh` crée des liens symboliques vers le dépôt (un fichier déjà présent est conservé en `.bak`) :
+`install.sh` symlinks the repo files into place (an existing file is kept as `.bak`):
 
-| Lien | Cible |
+| Link | Target |
 |---|---|
 | `~/.tmux.conf` | `tmux.conf` |
 | `~/.local/bin/tmux-project`, `tmux-notify`, `tmux-notify-monitor` | `bin/` |
 | `~/.config/systemd/user/tmux-notify-monitor.service` | `systemd/` |
 
-Les modifications faites dans `~/.tmux.conf` (ou via `prefix + e`) atterrissent donc directement dans le dépôt.
+Changes made to `~/.tmux.conf` (or via `prefix + e`) therefore land directly in the repo.
 
-### Réglages propres à la machine
+### Machine-specific settings
 
-`~/.tmux.local.conf` est chargé à la fin de la configuration, s'il existe. Exemple :
+`~/.tmux.local.conf` is loaded at the end of the configuration, if it exists. Example:
 
 ```tmux
 set -g default-shell "/usr/bin/zsh"
 set -g @project-dirs "$HOME/Documents/Code $HOME/Projects"
 ```
 
-## Prérequis
+## Requirements
 
 - tmux ≥ 3.8, Linux
-- [fzf](https://github.com/junegunn/fzf) et git pour les popups `prefix + f` et `prefix + C-f`
-- Optionnels : [tig](https://jonas.github.io/tig/) (popup git), btop, `wl-copy` ou `xclip` (presse-papier), [TPM](https://github.com/tmux-plugins/tpm) (resurrect / continuum)
-- Notifications : bureau Linux avec D-Bus (GNOME…), `python3-gi`, gawk
+- [fzf](https://github.com/junegunn/fzf) and git for the `prefix + f` and `prefix + C-f` popups
+- Optional: [tig](https://jonas.github.io/tig/) (git popup), btop, `wl-copy` or `xclip` (clipboard), [TPM](https://github.com/tmux-plugins/tpm) (resurrect / continuum)
+- Notifications: a Linux desktop with D-Bus (GNOME…), `python3-gi`, gawk
 
-## Raccourcis
+## Key bindings
 
-Le leader est `Ctrl+Space` (noté `prefix`).
+The leader is `Ctrl+Space` (written `prefix`).
 
-| Raccourci | Action |
+| Binding | Action |
 |---|---|
-| `prefix + f` | Choisir un dépôt git ou un worktree (sous `@project-dirs`) : rejoint la fenêtre ouverte dessus, sinon en crée une |
-| `prefix + C-f` | Basculer vers une autre session |
-| `prefix + g` | Git en popup (tig, sinon historique) |
-| `prefix + a` / `A` | Lancer Claude dans une nouvelle fenêtre / un split |
-| `prefix + C-a` | Session Claude flottante et persistante (bascule) |
-| `Alt+g` | Terminal flottant persistant (bascule) |
-| `prefix + u` | Lister les URLs visibles dans le pane |
-| `prefix + C-n` / `M-n` | Afficher / marquer comme lues les notifications |
-| `Alt+b` | Aller à la prochaine fenêtre signalée (sonnerie ou `●`) |
-| `Alt+h/j/k/l` | Changer de pane |
-| `Shift+←/→` | Fenêtre précédente / suivante |
-| `prefix + \|` / `-` | Split vertical / horizontal dans le dossier courant |
-| `Alt+↑` | Mode copie (vi), avec barre de défilement |
-| `F12` | Couper les raccourcis locaux pour piloter un tmux distant (SSH) |
-| `prefix + r` / `e` | Recharger / éditer la configuration |
+| `prefix + f` | Pick a git repo or worktree (under `@project-dirs`): switch to the window open on it, or create one |
+| `prefix + C-f` | Switch to another session |
+| `prefix + g` | Git in a popup (tig, else the log) |
+| `prefix + a` / `A` | Start Claude in a new window / a split |
+| `prefix + C-a` | Floating, persistent Claude session (toggle) |
+| `Alt+g` | Floating, persistent scratch terminal (toggle) |
+| `prefix + u` | List the URLs visible in the pane |
+| `prefix + C-n` / `M-n` | Show / mark as read the notifications |
+| `Alt+b` | Jump to the next flagged window (bell or `●`) |
+| `Alt+h/j/k/l` | Move between panes |
+| `Shift+←/→` | Previous / next window |
+| `prefix + \|` / `-` | Vertical / horizontal split in the current directory |
+| `Alt+↑` | Copy mode (vi), with a scrollbar |
+| `F12` | Disable local bindings to drive a remote tmux (SSH) |
+| `prefix + r` / `e` | Reload / edit the configuration |
 
-## Barre de statut
+## Status bar
 
-- `●` après le nom d'une fenêtre : du nouveau s'y est affiché depuis la dernière visite.
-- `⛶` : un pane de la fenêtre est zoomé.
-- Pastille jaune : la fenêtre a sonné (Claude a fini ou attend une réponse).
-- À droite : notifications non lues, branche git, dossier courant, heure.
-- Les popups et menus reprennent les couleurs ANSI du terminal ; la palette de la barre se change en tête de `tmux.conf` (et dans `bin/tmux-notify`, qui en garde une copie).
+- `●` after a window name: new output since your last visit.
+- `⛶`: a pane in the window is zoomed.
+- Yellow badge: the window rang the bell (Claude is done or waiting for input).
+- On the right: unread notifications, git branch, current directory, time.
+- Popups and menus use the terminal's ANSI colours; the bar palette is set at the top of `tmux.conf` (and in `bin/tmux-notify`, which keeps a copy).
 
-## Notifications du bureau
+## Desktop notifications
 
-`tmux-notify-monitor` écoute les notifications D-Bus et les empile dans une file ; le compteur s'affiche dans la barre. Pour l'activer :
+`tmux-notify-monitor` listens to D-Bus notifications and queues them; the counter shows up in the bar. To enable it:
 
 ```sh
 systemctl --user enable --now tmux-notify-monitor
 ```
 
-Les applications à ignorer se listent, une par ligne, dans `~/.config/tmux-notify/ignore`.
+Applications to ignore are listed, one per line, in `~/.config/tmux-notify/ignore`.
 
-## Licence
+## License
 
 [MIT](LICENSE)

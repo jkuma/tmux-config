@@ -1,5 +1,5 @@
 #!/bin/sh
-# Relie les fichiers du dépôt à leur emplacement ; un fichier existant est gardé en .bak.
+# Symlink the repo files into place; an existing file is kept as .bak.
 set -eu
 
 repo=$(cd "$(dirname "$0")" && pwd)
@@ -12,10 +12,10 @@ link() {
     mkdir -p "$(dirname "$dst")"
     if [ -e "$dst" ] || [ -L "$dst" ]; then
         mv "$dst" "$dst.bak"
-        echo "sauvegarde : $dst.bak"
+        echo "backup: $dst.bak"
     fi
     ln -s "$src" "$dst"
-    echo "lien : $dst → $src"
+    echo "link: $dst → $src"
 }
 
 link tmux.conf "$HOME/.tmux.conf"

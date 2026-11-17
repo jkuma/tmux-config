@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Écoute les notifications D-Bus du bureau et les empile dans la file tmux-notify.
+"""Listen to desktop D-Bus notifications and push them onto the tmux-notify queue.
 
-gnome-shell réémet chaque notification vers lui-même : on ne retient donc que
-les messages dont la destination est le propriétaire actuel du nom
-org.freedesktop.Notifications, sinon tout compterait double.
+gnome-shell re-sends every notification to itself, so only messages addressed
+to the current owner of org.freedesktop.Notifications are kept; otherwise
+everything would be counted twice.
 """
 import os
 import subprocess
@@ -64,9 +64,9 @@ def on_message(_conn, message, _incoming):
 
         if member != "Notify":
             return None
-        # Un client vise soit le nom unique du serveur (libnotify résout),
-        # soit le nom bien connu (Chrome). Les deux sont légitimes ; la copie
-        # que gnome-shell se réémet ne vise ni l'un ni l'autre.
+        # A client targets either the server's unique name (libnotify resolves it)
+        # or the well-known name (Chrome). Both are legitimate; the copy
+        # gnome-shell re-sends to itself targets neither.
         if message.get_destination() not in (state["owner"], NOTIF_NAME):
             return None
 
@@ -79,7 +79,7 @@ def on_message(_conn, message, _incoming):
             return None
 
         subprocess.run([QUEUE, "add", title, text or ""], check=False)
-    except Exception:  # un message malformé ne doit jamais tuer le démon
+    except Exception:  # a malformed message must never kill the daemon
         pass
     return None
 
