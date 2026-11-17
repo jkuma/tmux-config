@@ -3,9 +3,10 @@
 set -u
 
 session=$(tmux display -p '#{session_id}')
+depth=$(tmux show -gv @project-depth)
 dir=$(
     # unquoted on purpose: @project-dirs is a space-separated list
-    find $(tmux show -gv @project-dirs) -maxdepth 4 -name .git 2>/dev/null |
+    find $(tmux show -gv @project-dirs) -maxdepth $((depth + 1)) -name .git 2>/dev/null |
         sed 's|/\.git$||' |
         while read -r repo; do git -C "$repo" worktree list --porcelain 2>/dev/null; done |
         sed -n 's/^worktree //p' |

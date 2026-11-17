@@ -26,6 +26,7 @@ Changes made to `~/.tmux.conf` (or via `prefix + e`) therefore land directly in 
 ```tmux
 set -g default-shell "/usr/bin/zsh"
 set -g @project-dirs "$HOME/Documents/Code $HOME/Projects"
+set -g @project-depth 3   # repos up to 3 levels below each directory
 ```
 
 ## Requirements
