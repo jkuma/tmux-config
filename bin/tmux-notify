@@ -1,0 +1,128 @@
+#!/bin/sh
+# File d'attente de notifications système, affichée dans la barre tmux.
+#   add <titre> <message>   empile une notification
+#   count                   pastille pour la barre de statut (vide si rien)
+#   show                    affiche la liste puis marque tout comme lu
+#   clear                   marque tout comme lu sans afficher
+set -u
+
+DIR="${XDG_STATE_HOME:-$HOME/.local/state}/tmux-notify"
+PENDING="$DIR/pending"
+ARCHIVE="$DIR/archive"
+TMUX_BIN=$(command -v tmux)
+TAB=$(printf '\t')
+HISTORY=30          # entrées d'historique affichées par show
+
+# Palette (Solarized Dark), alignée sur ~/.tmux.conf
+BG="#002b36"; SURFACE="#073642"; MUTED="#586e75"
+FG="#93a1a1"; FG_DIM="#839496"
+BLUE="#268bd2"; LAVENDER="#6c71c4"; PEACH="#cb4b16"; YELLOW="#b58900"
+
+mkdir -p "$DIR"
+[ -f "$PENDING" ] || : > "$PENDING"
+[ -f "$ARCHIVE" ] || : > "$ARCHIVE"
+
+# Force le redessin immédiat de la barre plutôt que d'attendre status-interval.
+# Sans $TMUX (cas du démon systemd), on cible le socket par défaut.
+refresh() {
+    [ -x "$TMUX_BIN" ] && "$TMUX_BIN" refresh-client -S 2>/dev/null
+    return 0
+}
+
+# render <titre de section> <sous-titre> <couleur bordure> <couleur message>
+# Lit des enregistrements sur stdin et dessine un cartouche par notification.
+render() {
+    awk -F "$TAB" -v width="$COLS" -v section="$1" -v subtitle="$2" \
+        -v c_border="$3" -v c_msg="$4" -v c_time="$PEACH" -v c_app="$BLUE" \
+        -v c_subject="$LAVENDER" -v c_muted="$MUTED" '
+    function rgb(h) {
+        return "\033[38;2;" strtonum("0x" substr(h, 2, 2)) ";" \
+            strtonum("0x" substr(h, 4, 2)) ";" strtonum("0x" substr(h, 6, 2)) "m"
+    }
+    function rule(n,    s) { s = ""; while (n-- > 0) s = s "─"; return s }
+    # Largeur affichée : les emojis (U+1F300-U+1FAFF) occupent deux cellules.
+    function vlen(s) { return length(s) + gsub(/[🌀-🫿]/, "&", s) }
+    function row(s, c) {
+        printf "%s│ %s%s%*s%s │%s\n", border, c, s, inner - vlen(s), "", border, reset
+    }
+    # Découpe aux espaces ; un mot plus long que la ligne (URL) est coupé net.
+    function wrap(s, c,    n, w, i, cur) {
+        n = split(s, w, " "); cur = ""
+        for (i = 1; i <= n; i++) {
+            while (vlen(w[i]) > inner) {
+                if (cur != "") { row(cur, c); cur = "" }
+                row(substr(w[i], 1, inner), c); w[i] = substr(w[i], inner + 1)
+            }
+            if (w[i] == "") continue
+            if (cur == "") cur = w[i]
+            else if (vlen(cur) + 1 + vlen(w[i]) <= inner) cur = cur " " w[i]
+            else { row(cur, c); cur = w[i] }
+        }
+        if (cur != "") row(cur, c)
+    }
+    BEGIN {
+        reset = "\033[0m"; bold = "\033[1m"
+        border = rgb(c_border); time = bold rgb(c_time); app = rgb(c_app)
+        subject = bold rgb(c_subject); msg = rgb(c_msg); muted = rgb(c_muted)
+        box = width - 2; inner = box - 4
+        printf "%s %s%s%s · %s%s\n\n", bold, rgb(c_border), section, reset, muted, subtitle reset
+    }
+    {
+        title = $2; body = $3
+        i = index(title, " · ")
+        if (i) { appname = substr(title, 1, i - 1); summary = substr(title, i + 3) }
+        else   { appname = title; summary = "" }
+        gsub(/&amp;/, "\\&", body); gsub(/&lt;/, "<", body); gsub(/&gt;/, ">", body)
+        gsub(/&quot;/, "\"", body); gsub(/&#39;/, "\047", body)
+        print border "╭" rule(box - 2) "╮" reset
+        row($1, time)
+        row(appname, app)
+        if (summary != "") row(summary, subject)
+        if (body != "") wrap(body, msg)
+        print border "╰" rule(box - 2) "╯" reset
+        print ""
+    }'
+}
+
+case "${1:-show}" in
+    add)
+        # Un enregistrement = une ligne. Les corps de notification contiennent
+        # souvent des retours à la ligne : sans ça, le compteur et l'affichage
+        # partent en vrille.
+        flat() { printf '%s' "$1" | tr '\n\r\t' '   ' | tr -s ' '; }
+        printf '%s\t%s\t%s\n' "$(date '+%H:%M')" \
+            "$(flat "${2:-notification}")" "$(flat "${3:-}")" >> "$PENDING"
+        refresh
+        ;;
+
+    count)
+        n=$(wc -l < "$PENDING" 2>/dev/null) || n=0
+        n=$((n + 0))
+        [ "$n" -gt 0 ] && printf '#[fg=%s,bg=%s,bold] %s #[default]' "$BG" "$YELLOW" "$n"
+        ;;
+
+    show)
+        COLS=$(tput cols 2>/dev/null) || COLS=80
+        {
+            if [ -s "$PENDING" ]; then
+                render "Non lues" "$(wc -l < "$PENDING")" "$YELLOW" "$FG" < "$PENDING"
+            else
+                printf '\033[2m (aucune notification non lue)\033[0m\n\n'
+            fi
+            if [ -s "$ARCHIVE" ]; then
+                tail -n "$HISTORY" "$ARCHIVE" | render "Historique" "$HISTORY dernières" "$MUTED" "$FG_DIM"
+            fi
+        } | less -R
+        cat "$PENDING" >> "$ARCHIVE"
+        : > "$PENDING"
+        refresh
+        ;;
+
+    clear)
+        cat "$PENDING" >> "$ARCHIVE"
+        : > "$PENDING"
+        refresh
+        ;;
+esac
+
+exit 0

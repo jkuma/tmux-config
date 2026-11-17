@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""Écoute les notifications D-Bus du bureau et les empile dans la file tmux-notify.
+
+gnome-shell réémet chaque notification vers lui-même : on ne retient donc que
+les messages dont la destination est le propriétaire actuel du nom
+org.freedesktop.Notifications, sinon tout compterait double.
+"""
+import os
+import subprocess
+
+import gi
+
+gi.require_version("Gio", "2.0")
+from gi.repository import Gio, GLib  # noqa: E402
+
+QUEUE = os.path.expanduser("~/.local/bin/tmux-notify")
+NOTIF_NAME = "org.freedesktop.Notifications"
+IGNORE_FILE = os.path.expanduser("~/.config/tmux-notify/ignore")
+
+MATCH_RULES = [
+    "eavesdrop=true,type='method_call',"
+    "interface='org.freedesktop.Notifications',member='Notify'",
+    "type='signal',interface='org.freedesktop.DBus',"
+    "member='NameOwnerChanged',arg0='" + NOTIF_NAME + "'",
+]
+
+bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+state = {"owner": None}
+
+
+def resolve_owner():
+    try:
+        reply = bus.call_sync(
+            "org.freedesktop.DBus", "/org/freedesktop/DBus",
+            "org.freedesktop.DBus", "GetNameOwner",
+            GLib.Variant("(s)", (NOTIF_NAME,)),
+            GLib.VariantType("(s)"), Gio.DBusCallFlags.NONE, -1, None,
+        )
+        return reply.unpack()[0]
+    except GLib.Error:
+        return None
+
+
+def ignored(app):
+    try:
+        with open(IGNORE_FILE) as fh:
+            return app.casefold() in {
+                line.strip().casefold()
+                for line in fh
+                if line.strip() and not line.startswith("#")
+            }
+    except OSError:
+        return False
+
+
+def on_message(_conn, message, _incoming):
+    try:
+        member = message.get_member()
+
+        if member == "NameOwnerChanged":
+            _, _, new = message.get_body().unpack()
+            state["owner"] = new or None
+            return None
+
+        if member != "Notify":
+            return None
+        # Un client vise soit le nom unique du serveur (libnotify résout),
+        # soit le nom bien connu (Chrome). Les deux sont légitimes ; la copie
+        # que gnome-shell se réémet ne vise ni l'un ni l'autre.
+        if message.get_destination() not in (state["owner"], NOTIF_NAME):
+            return None
+
+        body = message.get_body().unpack()
+        app, summary, text = body[0], body[3], body[4]
+        title = app or "notification"
+        if summary:
+            title = f"{title} · {summary}" if app else summary
+        if ignored(app):
+            return None
+
+        subprocess.run([QUEUE, "add", title, text or ""], check=False)
+    except Exception:  # un message malformé ne doit jamais tuer le démon
+        pass
+    return None
+
+
+state["owner"] = resolve_owner()
+
+bus.call_sync(
+    "org.freedesktop.DBus", "/org/freedesktop/DBus",
+    "org.freedesktop.DBus.Monitoring", "BecomeMonitor",
+    GLib.Variant("(asu)", (MATCH_RULES, 0)),
+    None, Gio.DBusCallFlags.NONE, -1, None,
+)
+bus.add_filter(on_message)
+
+GLib.MainLoop().run()

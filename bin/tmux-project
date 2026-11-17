@@ -1,0 +1,22 @@
+#!/bin/sh
+# Choisit un dépôt git ou un worktree sous @project-dirs, puis rejoint la fenêtre déjà ouverte dessus ou en crée une.
+set -u
+
+session=$(tmux display -p '#{session_id}')
+dir=$(
+    # sans guillemets : @project-dirs est une liste séparée par des espaces
+    find $(tmux show -gv @project-dirs) -maxdepth 4 -name .git 2>/dev/null |
+        sed 's|/\.git$||' |
+        while read -r repo; do git -C "$repo" worktree list --porcelain 2>/dev/null; done |
+        sed -n 's/^worktree //p' |
+        while read -r d; do [ -d "$d" ] && echo "$d"; done |
+        sort -u |
+        "$(tmux show -gv @fzf)" --reverse --prompt 'projet> '
+) || exit 0
+
+win=$(tmux list-windows -t "$session" -f "#{==:#{pane_current_path},$dir}" -F '#{window_id}' | head -n 1)
+if [ -n "$win" ]; then
+    tmux select-window -t "$win"
+else
+    tmux new-window -t "$session:" -c "$dir"
+fi
